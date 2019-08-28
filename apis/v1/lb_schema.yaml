@@ -1,0 +1,802 @@
+---
+$schema: 'http://json-schema.org/draft-04/schema#'
+title: ApplicationLoadBalancerSchema
+type: object
+
+properties:
+  $ref: '#/definitions/root'
+
+required:
+  - placement
+  - configuration
+  - openstack_auth
+  - configuration_type
+
+definitions:
+
+  root:
+    id:
+      type: string
+      format: uuid
+      description: ID of LoadBalancer assigned by the system
+    name:
+      type: string
+      description: 'Name to assign to the load balancer'
+    description:
+      type: string
+      description: 'Name to assign to the load balancer'
+    placement:
+      $ref: '#/definitions/placement'
+    configuration_type:
+      type: string
+      enum:
+      - BASIC
+      - EXTENDED
+    configuration:
+      $ref: '#/definitions/envoy_configuration'
+    openstack_auth:
+      $ref: '#/definitions/openstack_auth'
+
+  non_empty_string:
+    type: string
+    minLength: 1
+
+  openstack_auth:
+    type: object
+    description: 'Openstack tenant particulars (as specified in openrc) used to provision the load balancer'
+    required:
+    - OS_TENANT_NAME
+    - OS_USERNAME
+    - OS_PASSWORD
+    - OS_AUTH_URL
+    properties:
+      OS_TENANT_NAME:
+        type: string
+        minLength: 1
+        description: 'Openstack Tenant Name'
+      OS_USERNAME:
+        type: string
+        minLength: 1
+        description: 'Openstack Username of user in the tenant with privilege to deploy VMs'
+      OS_PASSWORD:
+        type: string
+        minLength: 1
+        description: 'Openstack Password'
+      OS_AUTH_URL:
+        type: string
+        format: uri
+        minLength: 9
+        description: 'Openstack Keystone Auth or API Proxy URL'
+      OS_AUTH_VERSION:
+        type: number
+        description: 'Version of Keystone authentication to use'
+        default: 2
+        example: 2
+        multipleOf: 1.0
+        minimum: 2
+        maximum: 4
+
+  placement:
+    type: object
+    description: 'LoadBalancer Placement Particulars'
+    required:
+    - number_of_load_balancers
+    - external_subnet
+    - internal_subnet
+    - instance_flavour
+    - security_group_rules
+    properties:
+      number_of_load_balancers:
+        type:  number
+        description: 'Number of load-balancer nodes/listeners to deploy in the load-balancer group'
+        default: 2
+        example: 2
+        minimum: 1
+      external_subnet:
+        type: string
+        description: 'Subnet into which the load balanced service is exposed'
+      internal_subnet:
+        type: string
+        description: 'Subnet where the load-balanced servers reside'
+      instance_flavour:
+        type: string
+        description: |
+          Openstack flavour to use for load-balancer nodes.
+          NOTE: Flavors are not automatically created and must exist prior to making requests to this API.
+      security_group_rules:
+        $ref: '#/definitions/security_group_rules'
+
+  security_group_rules:
+    type: array
+    description: 'Security Group Rules to apply to all load-balancer nodes'
+    items:
+      $ref: '#/definitions/security_group_rule'
+    minItems: 1
+
+  security_group_rule:
+    type: object
+    required:
+    - cidr
+    - protocol
+    - destination_port
+    properties:
+      cidr:
+        type: string
+        description: 'IP Range of the network source'
+        format: ipv4
+        default: 0.0.0.0/0
+        example: 0.0.0.0/0
+      protocol:
+        type: string
+        description: 'Layer 4 Protocol that will be matched'
+        default: tcp
+        enum:
+        - tcp
+        - udp
+      destination_port:
+        type: number
+        description: 'Destination port range to allow'
+        default: 443
+        example: 443
+        minimum: 1
+        maximum: 65535
+      source_port:
+        type: number
+        description: 'Source port range to allow'
+        default: 0
+        example: 0
+        minimum: 0
+        maximum: 65535
+      direction:
+        type: string
+        description: 'Direction of rule (ingress or egress)'
+        default: ingress
+        enum:
+        - egress
+        - ingress
+
+  data_source:
+    type: object
+    properties:
+      filename:
+        type: string
+      inline_bytes:
+        type: string
+      inline_string:
+        type: string
+
+  headers_to_add:
+    type: array
+    items:
+      type: object
+      properties:
+        header:
+          type: object
+          properties:
+            key:
+              format: string
+              example: x-custom-header
+            value:
+              format: string
+              example: '%START_TIME(%s.%3f)%'
+        append:
+          type: boolean
+
+  headers_to_remove:
+    type: array
+    items:
+      type: string
+      example: header_foo
+
+  envoy_configuration:
+    type: object
+    description: 'Envoy configuration object'
+    properties:
+      static_resources:
+        type: object
+        properties:
+
+          listeners:
+            type: array
+            description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/listeners/listeners'
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+
+                address:
+                  type: object
+                  properties:
+                    socket_address:
+                      type: object
+                      properties:
+                        protocol:
+                          type: string
+                          default: TCP
+                          enum:
+                          - TCP
+                          - UDP
+                        address:
+                          type: string
+                          format: ipv4
+                          default: '::'
+                          example: '::'
+                        port_value:
+                          type: number
+                          minimum: 1
+                          maximum: 65535
+                          default: 443
+                        ipv4_compat:
+                          type: boolean
+                          default: true
+
+                listener_filters:
+                  type: array
+                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/faq/sni.html?highlight=listener_filters'
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        default: envoy.listener.tls_inspector
+                      typed_config:
+                        type: object
+
+                filter_chains:
+                  type: array
+                  items:
+                    type: object
+                    description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/listener/listener.proto#listener-filterchain'
+                    properties:
+                      filter_chain_match:
+                        type: object
+                        properties:
+                          destination_port:
+                            type: number
+                            minimum: 1
+                            maximum: 65535
+                          prefix_ranges:
+                            type: object
+                            properties:
+                              socket_address:
+                                type: object
+                                properties:
+                          server_names:
+                            type: string
+                      tls_context:
+                        type: object
+                        properties:
+                          common_tls_context:
+                            type: object
+                            properties:
+                              tls_params:
+                                type: object
+                              validation_context:
+                                type: object
+                              alpn_protocols:
+                                type: object
+                              tls_certificates:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    certificate_chain:
+                                      $ref: '#/definitions/data_source'
+                                    private_key:
+                                      $ref: '#/definitions/data_source'
+                                    password:
+                                      $ref: '#/definitions/data_source'
+                          require_client_certificate:
+                            type: boolean
+                          session_ticket_keys:
+                            type: object
+                            properties:
+                              keys:
+                                type: array
+                                items:
+                                  type: string
+
+                      use_proxy_proto:
+                        type: boolean
+                      transport_socket:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          config:
+                            type: object
+                          typed_config:
+                            type: object
+
+                      filters:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/listener/listener.proto#envoy-api-msg-listener-filter'
+                              default: envoy.http_connection_manager
+                              enum:
+                              - envoy.client_ssl_auth
+                              - envoy.echo
+                              - envoy.http_connection_manager
+                              - envoy.mongo_proxy
+                              - envoy.ratelimit
+                              - envoy.redis_proxy
+                              - envoy.tcp_proxy
+                            config:
+                              type: object
+                            typed_config:
+                              type: object
+                              properties:
+                                '@type':
+                                  type: string
+                                  default: type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager
+                                codec_type:
+                                  type: string
+                                  default: AUTO
+                                  enum:
+                                  - AUTO
+                                  - HTTP1
+                                  - HTTP2
+
+                                stat_prefix:
+                                  type: string
+                                generate_request_id:
+                                  type: boolean
+                                add_user_agent:
+                                  type: boolean
+                                tracing:
+                                  type: object
+                                http_protocol_options:
+                                  type: object
+                                  properties:
+                                    idle_timeout:
+                                      type: number
+                                    allow_absolute_url:
+                                      type: boolean
+                                    accept_http_10:
+                                      type: boolean
+                                      default: false
+                                    default_host_for_http_10:
+                                      type: string
+                                http2_protocol_options:
+                                  type: object
+                                  properties:
+                                    hpack_table_size:
+                                      type: number
+                                    max_concurrent_streams:
+                                      type: number
+                                    initial_stream_window_size:
+                                      type: number
+                                    initial_connection_window_size:
+                                      type: number
+                                    allow_connect:
+                                      type: boolean
+                                server_name:
+                                  type: string
+                                  default: envoy
+                                max_request_headers_kb:
+                                  type: number
+                                idle_timeout:
+                                  type: number
+                                stream_idle_timeout:
+                                  type: number
+                                request_timeout:
+                                  type: number
+                                drain_timeout:
+                                  type: number
+                                delayed_close_timeout:
+                                  type: number
+                                use_remote_address:
+                                  type: boolean
+                                xff_num_trusted_hops:
+                                  type: boolean
+                                internal_address_config:
+                                  type: object
+                                skip_xff_append:
+                                  type: boolean
+                                via:
+                                  type: string
+                                forward_client_cert_details:
+                                  type: object
+                                set_current_client_cert_details:
+                                  type: object
+                                proxy_100_continue:
+                                  type: boolean
+                                upgrade_configs:
+                                  type: object
+                                normalize_path:
+                                  type: boolean
+
+                                access_log:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                      default: envoy.file_access_log
+                                    config:
+                                      type: object
+                                      properties:
+                                        path:
+                                          type: string
+                                          example: '/var/log/envoy.log'
+
+                                http_filters:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      name:
+                                        type: string
+                                        default: envoy.router
+                                        enum:
+                                        - envoy.buffer
+                                        - envoy.cors
+                                        - envoy.ext_authz
+                                        - envoy.fault
+                                        - envoy.filters.http.grpc_http1_reverse_bridge
+                                        - envoy.filters.http.header_to_metadata
+                                        - envoy.filters.http.jwt_authn
+                                        - envoy.filters.http.rbac
+                                        - envoy.filters.http.tap
+                                        - envoy.grpc_http1_bridge
+                                        - envoy.grpc_json_transcoder
+                                        - envoy.grpc_web
+                                        - envoy.gzip
+                                        - envoy.health_check
+                                        - envoy.http_dynamo_filter
+                                        - envoy.ip_tagging
+                                        - envoy.lua
+                                        - envoy.rate_limit
+                                        - envoy.router
+                                        - envoy.squash
+                                      config:
+                                        type: object
+
+                                route_config:
+                                  type: object
+                                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/rds.proto#routeconfiguration'
+                                  properties:
+                                    name:
+                                      type: string
+                                      default: local_route
+                                    validate_clusters:
+                                      type: boolean
+
+                                    virtual_hosts:
+                                      type: array
+                                      description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/route/route.proto#route-virtualhost'
+                                      items:
+                                        type: object
+                                        properties:
+                                          name:
+                                            type: string
+                                            default: local_service
+                                          domains:
+                                            type: array
+                                            items:
+                                              type: string
+                                              default: '*'
+                                              example: 'google.com'
+                                          require_tls:
+                                            type: string
+                                          retry_policy:
+                                            type: object
+                                            description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/route/route.proto#'
+                                          cors:
+                                            type: object
+                                            description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/route/route.proto#envoy-api-msg-route-corspolicy'
+
+                                          routes:
+                                            type: array
+                                            items:
+                                              type: object
+                                              description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/route/route.proto#envoy-api-msg-route-route'
+                                              properties:
+                                                match:
+                                                  type: object
+                                                  properties:
+                                                    prefix:
+                                                      type: string
+                                                      default: '/'
+                                                      example: '/path/to/app'
+
+                                                redirect:
+                                                  type: object
+                                                  parameters:
+                                                    path_redirect:
+                                                      type: string
+                                                      example: '/'
+                                                    https_redirect:
+                                                      type: boolean
+                                                      example: true
+
+                                                direct_response:
+                                                  type: object
+                                                  properties:
+                                                    status:
+                                                      type: number
+                                                      default: 200
+                                                      example: 200
+                                                      minimum: 200
+                                                      maximum: 399
+                                                      minimum: 100
+                                                      maximum: 599
+                                                    body:
+                                                      $ref: '#/definitions/data_source'
+
+                                                metadata:
+                                                  type: object
+                                                decorator:
+                                                  type: object
+                                                request_headers_to_add:
+                                                  '$ref': '#/definitions/headers_to_add'
+                                                response_headers_to_add:
+                                                  '$ref': '#/definitions/headers_to_add'
+                                                request_headers_to_remove:
+                                                  '$ref': '#/definitions/headers_to_remove'
+                                                response_headers_to_remove:
+                                                  '$ref': '#/definitions/headers_to_remove'
+
+                                                route:
+                                                  type: object
+                                                  properties:
+                                                    cluster:
+                                                      type: string
+                                                    cluster_header:
+                                                      type: string
+                                                    weighted_cluster:
+                                                      type: object
+                                                    cluster_not_found_response:
+                                                      type: string
+                                                      enum:
+                                                      - SERVICE_UNAVAILABLE
+                                                      - NOT_FOUND
+                                                    metadata_match:
+                                                      type: object
+                                                    prefix_rewrite:
+                                                      type: string
+                                                      example: '/'
+                                                    auto_host_rewrite:
+                                                      type: boolean
+                                                      default: true
+                                                    host_rewrite:
+                                                      type: string
+                                                    timeout:
+                                                      type: string
+                                                    idle_timeout:
+                                                      type: string
+                                                    priority:
+                                                      type: object
+                                                    cors:
+                                                      type: object
+                                                    internal_redirect_action:
+                                                      type: string
+                                                      enum:
+                                                      - PASS_THROUGH_INTERNAL_REDIRECT
+                                                      - HANDLE_INTERNAL_REDIRECT
+                                                    upgrade_configs:
+                                                      type: object
+                                                    priority:
+                                                      type: object
+                                                    request_mirror_policy:
+                                                      type: object
+                                                    retry_policy:
+                                                      type: object
+
+                                          request_headers_to_add:
+                                            '$ref': '#/definitions/headers_to_add'
+                                          response_headers_to_add:
+                                            '$ref': '#/definitions/headers_to_add'
+                                          request_headers_to_remove:
+                                            '$ref': '#/definitions/headers_to_remove'
+                                          response_headers_to_remove:
+                                            '$ref': '#/definitions/headers_to_remove'
+                                          internal_only_headers:
+                                            '$ref': '#/definitions/headers_to_remove'
+
+          clusters:
+            type: array
+            items:
+              type: object
+              properties:
+
+                name:
+                  type: string
+                connect_timeout:
+                  type: string
+
+                type:
+                  type: string
+                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/cds.proto.html?highlight=dns_lookup_family#enum-cluster-discoverytype'
+                  enum:
+                  - STATIC
+                  - STRICT_DNS
+                  - LOGICAL_DNS
+                  - EDS
+                  - ORIGINAL_DST
+
+                dns_resolvers:
+                  type: array
+                  items:
+                    type: string
+                dns_refresh_rate:
+                  type: string
+                dns_lookup_family:
+                  type: string
+                  default: V4_ONLY
+                  enum:
+                  - V4_ONLY
+                  - V6_ONLY
+                  - AUTO
+
+                max_requests_per_connection:
+                  type: number
+                protocol_selection:
+                  type: string
+                  enum:
+                  - USE_CONFIGURED_PROTOCOL
+                  - USE_DOWNSTREAM_PROTOCOL
+
+                lb_policy:
+                  type: string
+                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/cds.proto#envoy-api-enum-cluster-lbpolicy'
+                  default: ROUND_ROBIN
+                  enum:
+                  - ROUND_ROBIN
+                  - LEAST_REQUEST
+                  - RING_HASH
+                  - RANDOM
+                  - ORIGINAL_DST_LB
+                  - MAGLEV
+
+                tls_context:
+                  type: object
+                  properties:
+                    sni:
+                      type: string
+                      format: hostname
+
+                cleanup_interval:
+                  type: string
+
+                outlier_detection:
+                  type: object
+                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/cluster/outlier_detection.proto#envoy-api-msg-cluster-outlierdetection'
+                  properties:
+                    consecutive_5xx:
+                      type: number
+                      default: 5
+                    interval:
+                      type: string
+                      default: 10s
+                    base_ejection_time:
+                      type: string
+                      default: 30s
+                    max_ejection_percent:
+                      type: number
+                    enforcing_consecutive_5xx:
+                      type: number
+                      default: 100
+                    enforcing_success_rate:
+                      type: number
+                      default: 100
+                    success_rate_minimum_hosts:
+                      type: number
+                      default: 5
+                    success_rate_request_volume:
+                      type: number
+                      default: 100
+                    success_rate_stdev_factor:
+                      type: number
+                      default: 1900
+                    consecutive_gateway_failure:
+                      type: number
+                      default: 5
+                    enforicing_consecutive_gateway_failure:
+                      type: number
+                      default: 0
+
+                load_assignment:
+                  type: object
+                  properties:
+                    cluster_name:
+                      type: string
+                    endpoints:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          lb_endpoints:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                endpoint:
+                                  type: object
+                                  properties:
+                                    address:
+                                      type: object
+                                      properties:
+                                        socket_address:
+                                          type: object
+                                          properties:
+                                            address:
+                                              type: string
+                                            port_value:
+                                              type: number
+                                              minimum: 1
+                                              maximum: 65535
+                                              default: 443
+                                            protocol:
+                                              type: string
+                                            named_port:
+                                              type: string
+                                            resolver_name:
+                                              type: string
+                                            ipv4_compat:
+                                              type: boolean
+                                              default: true
+
+                health_checks:
+                  type: object
+                  description: 'https://www.envoyproxy.io/docs/envoy/v1.10.0/api-v2/api/v2/core/health_check.proto'
+                  properties:
+                    timeout:
+                      type: string
+                    healthy_threshold:
+                      type: string
+                    unhealthy_threshold:
+                      type: string
+                    interval:
+                      type: string
+                    interval_jitter:
+                      type: string
+                    interval_jitter_percent:
+                      type: string
+                    reuse_connection:
+                      type: boolean
+                    no_traffic_interval:
+                      type: string
+                    unhealthy_interval:
+                      type: string
+                    unhealthy_edge_interval:
+                      type: string
+                    healthy_edge_interval:
+                      type: string
+                    http_health_check:
+                      type: object
+                      properties:
+                        host:
+                          type: string
+                          format: hostname
+                        path:
+                          type: string
+                          example: '/healthz'
+                        service_name:
+                          type: string
+                        request_headers_to_add:
+                          '$ref': '#/definitions/headers_to_add'
+                        request_headers_to_remove:
+                          '$ref': '#/definitions/headers_to_remove'
+                        use_http2:
+                          type: boolean
+                        expected_statuses:
+                          type: object
+                          properties:
+                            start:
+                              type: number
+                              minimum: 200
+                              maximum: 499
+                            end:
+                              type: number
+                              minimum: 200
+                              maximum: 499
+                    event_log_path:
+                      type: string
+                    always_log_health_check_failures:
+                      type: boolean
+

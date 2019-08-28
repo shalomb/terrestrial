@@ -1,0 +1,29 @@
+# ssh_config defaults
+
+# vim:ft=sshconfig
+
+Host *
+  CheckHostIP        no
+  Compression        yes
+  ConnectionAttempts 3
+  ConnectTimeout     5
+  ControlMaster      auto
+  ControlPath        .ssh_master-%r@%h:%p
+  ControlPersist     600
+  ForwardAgent       no
+  ForwardX11         no
+  ForwardX11Trusted  no
+  GSSAPIAuthentication no
+  GSSAPITrustDns     no
+  HashKnownHosts     no
+  HostbasedAuthentication no
+  IdentitiesOnly     no
+  IPQoS              lowdelay
+  PasswordAuthentication no
+  PubkeyAuthentication yes
+  TCPKeepAlive       yes
+  UpdateHostKeys     ask
+  ServerAliveInterval 15
+  StrictHostKeyChecking yes
+  UserKnownHostsFile .ssh_known_hosts
+  VisualHostKey      no
